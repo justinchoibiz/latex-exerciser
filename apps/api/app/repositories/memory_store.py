@@ -1,5 +1,6 @@
 from copy import deepcopy
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -258,6 +259,17 @@ SEED_QUIZZES: list[dict[str, Any]] = [
     },
 ]
 
+def utc_now_iso() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+def get_quiz_sort_key(quiz: dict[str, Any]) -> tuple[int, int | str]:
+    quiz_id = quiz["id"]
+    suffix = quiz_id.rsplit("_", 1)[-1]
+
+    if suffix.isdigit():
+        return quiz["difficultyLevel"], int(suffix)
+
+    return quiz["difficultyLevel"], quiz_id
 
 @dataclass
 class MemoryStore:
@@ -266,8 +278,11 @@ class MemoryStore:
     quizzes: dict[str, dict[str, Any]] = field(
         default_factory=lambda: {quiz["id"]: deepcopy(quiz) for quiz in SEED_QUIZZES}
     )
+    quiz_sessions: dict[str, dict[str, Any]] = field(default_factory=dict)
+    reveal_state_by_session_id: dict[str, set[str]] = field(default_factory=dict)
     user_id_sequence: int = 1
     quiz_id_sequence: int = 1
+    session_id_sequence: int = 1
 
     def create_user(self, email: str, display_name: str, password: str) -> dict[str, str]:
         existing_user = self.get_user_by_email(email)
@@ -287,19 +302,24 @@ class MemoryStore:
         self.users[user_id] = user
         self.settings_by_user_id[user_id] = deepcopy(DEFAULT_USER_SETTINGS)
 
-        return user
+        return deepcopy(user)
 
     def get_user_by_email(self, email: str) -> dict[str, str] | None:
         normalized_email = email.lower()
 
         for user in self.users.values():
             if user["email"].lower() == normalized_email:
-                return user
+                return deepcopy(user)
 
         return None
 
     def get_user_by_id(self, user_id: str) -> dict[str, str] | None:
-        return self.users.get(user_id)
+        user = self.users.get(user_id)
+
+        if user is None:
+            return None
+
+        return deepcopy(user)
 
     def get_settings_by_user_id(self, user_id: str) -> dict[str, Any]:
         if user_id not in self.settings_by_user_id:
@@ -344,7 +364,7 @@ class MemoryStore:
             deepcopy(quiz)
             for quiz in sorted(
                 quizzes,
-                key=lambda quiz: (quiz["difficultyLevel"], quiz["id"]),
+                key=get_quiz_sort_key,
             )
         ]
 
@@ -401,5 +421,131 @@ class MemoryStore:
         del self.quizzes[quiz_id]
         return True
 
+    def create_quiz_session(
+        self,
+        user_id: str,
+        level_min: int,
+        level_max: int,
+    ) -> dict[str, Any]:
+        selected_quizzes: list[dict[str, Any]] = []
+
+        for difficulty_level in range(level_min, level_max + 1):
+            level_quizzes = self.list_quizzes(difficulty_level=difficulty_level)
+
+            if len(level_quizzes) < 10:
+                raise ValueError("Not enough quizzes for selected level range.")
+
+            selected_quizzes.extend(level_quizzes[:10])
+
+        session_id = f"session_{self.session_id_sequence}"
+        self.session_id_sequence += 1
+
+        session = {
+            "id": session_id,
+            "userId": user_id,
+            "levelMin": level_min,
+            "levelMax": level_max,
+            "quizzes": selected_quizzes,
+            "currentIndex": 0,
+            "answers": [],
+            "status": "playing",
+            "startedAt": utc_now_iso(),
+            "completedAt": None,
+        }
+
+        self.quiz_sessions[session_id] = session
+        self.reveal_state_by_session_id[session_id] = set()
+
+        return deepcopy(session)
+
+    def get_quiz_session_by_id(self, session_id: str) -> dict[str, Any] | None:
+        session = self.quiz_sessions.get(session_id)
+
+        if session is None:
+            return None
+
+        return deepcopy(session)
+
+    def get_owned_quiz_session(
+        self,
+        session_id: str,
+        user_id: str,
+    ) -> dict[str, Any] | None:
+        session = self.quiz_sessions.get(session_id)
+
+        if session is None or session["userId"] != user_id:
+            return None
+
+        return deepcopy(session)
+
+    def mark_current_quiz_revealed(
+        self,
+        session_id: str,
+        quiz_id: str,
+    ) -> dict[str, Any] | None:
+        session = self.quiz_sessions.get(session_id)
+
+        if session is None:
+            return None
+
+        current_quiz = self.get_current_quiz(session)
+
+        if current_quiz is None or current_quiz["id"] != quiz_id:
+            raise ValueError("quizId does not match current question.")
+
+        self.reveal_state_by_session_id.setdefault(session_id, set()).add(quiz_id)
+
+        return deepcopy(current_quiz)
+
+    def get_current_quiz(self, session: dict[str, Any]) -> dict[str, Any] | None:
+        if session["status"] == "completed":
+            return None
+
+        current_index = session["currentIndex"]
+
+        if current_index >= len(session["quizzes"]):
+            return None
+
+        return deepcopy(session["quizzes"][current_index])
+
+    def has_answer_for_quiz(self, session: dict[str, Any], quiz_id: str) -> bool:
+        return any(answer["quizId"] == quiz_id for answer in session["answers"])
+
+    def add_quiz_answer(
+        self,
+        session_id: str,
+        answer: dict[str, Any],
+    ) -> dict[str, Any]:
+        session = self.quiz_sessions[session_id]
+
+        if self.has_answer_for_quiz(session, answer["quizId"]):
+            raise ValueError("Current question has already been submitted.")
+
+        session["answers"].append(answer)
+
+        return deepcopy(answer)
+
+    def was_quiz_revealed(self, session_id: str, quiz_id: str) -> bool:
+        return quiz_id in self.reveal_state_by_session_id.get(session_id, set())
+
+    def advance_quiz_session(self, session_id: str) -> dict[str, Any] | None:
+        session = self.quiz_sessions.get(session_id)
+
+        if session is None:
+            return None
+
+        if session["status"] == "completed":
+            return deepcopy(session)
+
+        next_index = session["currentIndex"] + 1
+
+        if next_index >= len(session["quizzes"]):
+            session["status"] = "completed"
+            session["completedAt"] = utc_now_iso()
+            session["currentIndex"] = len(session["quizzes"]) - 1
+        else:
+            session["currentIndex"] = next_index
+
+        return deepcopy(session)
 
 memory_store = MemoryStore()
