@@ -1,3 +1,3 @@
-from app.api import auth, settings
+from app.api import auth, quizzes, settings
 
-__all__ = ["auth", "settings"]
+__all__ = ["auth", "quizzes", "settings"]

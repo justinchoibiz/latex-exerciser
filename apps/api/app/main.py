@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
+from app.api.quizzes import router as quizzes_router
 from app.api.settings import router as settings_router
 
 app = FastAPI(
@@ -27,3 +28,4 @@ def health_check() -> dict[str, str]:
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
+app.include_router(quizzes_router, prefix="/api")
