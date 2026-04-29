@@ -1,4 +1,5 @@
 from functools import lru_cache
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -10,6 +11,13 @@ class Settings(BaseSettings):
     cors_origins: str = Field(
         default="http://localhost:3000",
         alias="CORS_ORIGINS",
+    )
+    database_url: str = Field(
+        default=(
+            "postgresql+psycopg://latex_exerciser:"
+            "latex_exerciser_password@localhost:5432/latex_exerciser"
+        ),
+        alias="DATABASE_URL",
     )
 
     model_config = SettingsConfigDict(

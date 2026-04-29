@@ -6,6 +6,7 @@ from app.api.quiz_sessions import router as quiz_sessions_router
 from app.api.quizzes import router as quizzes_router
 from app.api.settings import router as settings_router
 from app.core.config import get_settings
+from app.core.database import check_database_connection, mask_database_url
 
 settings = get_settings()
 
@@ -24,10 +25,13 @@ app.add_middleware(
 
 
 @app.get("/api/health")
-def health_check() -> dict[str, str]:
+def health_check() -> dict[str, str | bool]:
     return {
         "status": "ok",
         "environment": settings.app_env,
+        "databaseConfigured": bool(settings.database_url),
+        "databaseUrl": mask_database_url(settings.database_url),
+        "databaseReachable": check_database_connection(),
     }
 
 

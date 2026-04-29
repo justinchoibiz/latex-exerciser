@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: latex-exerciser-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: latex_exerciser
+      POSTGRES_USER: latex_exerciser
+      POSTGRES_PASSWORD: latex_exerciser_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - latex_exerciser_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U latex_exerciser -d latex_exerciser",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  latex_exerciser_postgres_data:
