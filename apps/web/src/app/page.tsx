@@ -1,5 +1,7 @@
-import { redirect } from "next/navigation";
+import { HomeRedirectPage } from "@/app/page-client";
 
 export default function HomePage() {
-  redirect("/quiz/setup");
+
+  return <HomeRedirectPage />;
+
 }
