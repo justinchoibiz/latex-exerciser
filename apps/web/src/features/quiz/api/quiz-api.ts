@@ -2,6 +2,7 @@ import type {
   CreateQuizSessionRequest,
   CreateQuizSessionResponse,
   NextQuestionResponse,
+  Quiz,
   QuizResult,
   QuizSession,
   RevealAnswerRequest,
@@ -77,5 +78,14 @@ export function getQuizResult(token: string, sessionId: string) {
   return apiClient<QuizResult>(`/quiz/sessions/${sessionId}/result`, {
     method: "GET",
     token,
+  });
+}
+
+export function listQuizzes(difficultyLevel?: number) {
+  const query =
+    difficultyLevel === undefined ? "" : `?difficultyLevel=${difficultyLevel}`;
+
+  return apiClient<Quiz[]>(`/quizzes${query}`, {
+    method: "GET",
   });
 }
