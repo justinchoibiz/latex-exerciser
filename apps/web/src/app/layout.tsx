@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 
@@ -20,6 +21,18 @@ export const metadata: Metadata = {
   description: "Practice LaTeX equation input through timed quizzes.",
 };
 
+function PageFallback() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-6">
+      <section className="rounded-2xl border border-neutral-200 bg-white p-8 text-center shadow-sm">
+        <p className="text-sm font-medium text-neutral-500">
+          Loading LaTeX Exerciser...
+        </p>
+      </section>
+    </main>
+  );
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,7 +41,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        {children}
+        <Suspense fallback={<PageFallback />}>{children}</Suspense>
         <Toaster />
       </body>
     </html>
