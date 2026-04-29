@@ -1,0 +1,1 @@
+export { LatexPreview } from "@/shared/ui/latex-preview";
