@@ -1,7 +1,12 @@
 import type {
   CreateQuizSessionRequest,
   CreateQuizSessionResponse,
+  NextQuestionResponse,
   QuizSession,
+  RevealAnswerRequest,
+  RevealAnswerResponse,
+  SubmitAnswerRequest,
+  SubmitAnswerResponse,
 } from "@/entities/quiz";
 import { apiClient } from "@/shared/api/client";
 
@@ -24,4 +29,45 @@ export function getQuizSession(token: string, sessionId: string) {
     method: "GET",
     token,
   });
+}
+
+export function submitAnswer(
+  token: string,
+  sessionId: string,
+  payload: SubmitAnswerRequest,
+) {
+  return apiClient<SubmitAnswerResponse, SubmitAnswerRequest>(
+    `/quiz/sessions/${sessionId}/submit`,
+    {
+      method: "POST",
+      token,
+      body: payload,
+    },
+  );
+}
+
+export function revealAnswer(
+  token: string,
+  sessionId: string,
+  payload: RevealAnswerRequest,
+) {
+  return apiClient<RevealAnswerResponse, RevealAnswerRequest>(
+    `/quiz/sessions/${sessionId}/reveal`,
+    {
+      method: "POST",
+      token,
+      body: payload,
+    },
+  );
+}
+
+export function nextQuestion(token: string, sessionId: string) {
+  return apiClient<NextQuestionResponse, Record<string, never>>(
+    `/quiz/sessions/${sessionId}/next`,
+    {
+      method: "POST",
+      token,
+      body: {},
+    },
+  );
 }

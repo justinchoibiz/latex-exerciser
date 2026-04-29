@@ -41,6 +41,35 @@ export type CreateQuizSessionResponse = {
   sessionId: string;
 };
 
+export type SubmitAnswerRequest = {
+  quizId: string;
+  submittedLatex: string;
+  responseTimeSec: number;
+  timedOut: boolean;
+};
+
+export type SubmitAnswerResponse = {
+  isCorrect: boolean;
+  score: number;
+  correctLatex: string;
+  acceptedVariants: string[];
+};
+
+export type RevealAnswerRequest = {
+  quizId: string;
+};
+
+export type RevealAnswerResponse = {
+  correctLatex: string;
+  acceptedVariants: string[];
+};
+
+export type NextQuestionResponse = {
+  sessionId: string;
+  currentIndex: number;
+  status: QuizSessionStatus;
+};
+
 export type QuizResult = {
   sessionId: string;
   totalScore: number;

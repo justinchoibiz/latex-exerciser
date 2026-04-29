@@ -1,16 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuthStore } from "@/entities/auth";
-import type { Quiz, QuizSession } from "@/entities/quiz";
-import { getQuizSession, QuestionTimer } from "@/features/quiz";
+import type {
+  Quiz,
+  QuizSession,
+  RevealAnswerResponse,
+  SubmitAnswerResponse,
+} from "@/entities/quiz";
+import {
+  getQuizSession,
+  nextQuestion,
+  QuestionTimer,
+  revealAnswer,
+  submitAnswer,
+} from "@/features/quiz";
 import { calculateRemainingTime } from "@/features/quiz/lib/timer";
 import { LatexPreview } from "@/shared/ui";
 
 type LoadState = "idle" | "loading" | "success" | "error";
+type ActionState = "idle" | "submitting" | "revealing" | "advancing" | "error";
 
 function getCurrentQuiz(session: QuizSession | null): Quiz | null {
   if (!session) {
@@ -36,7 +48,16 @@ function getProgressPercent(session: QuizSession | null) {
   return Math.round(((session.currentIndex + 1) / session.quizzes.length) * 100);
 }
 
+function calculateResponseTimeSec(questionStartedAtMs: number | null) {
+  if (questionStartedAtMs === null) {
+    return 0;
+  }
+
+  return Math.max(0, Number(((Date.now() - questionStartedAtMs) / 1000).toFixed(2)));
+}
+
 export function QuizPlayer() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
 
@@ -46,6 +67,7 @@ export function QuizPlayer() {
   const [session, setSession] = useState<QuizSession | null>(null);
   const [latexInput, setLatexInput] = useState("");
   const [loadState, setLoadState] = useState<LoadState>("idle");
+  const [actionState, setActionState] = useState<ActionState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [questionStartedAtMs, setQuestionStartedAtMs] = useState<number | null>(
@@ -54,9 +76,25 @@ export function QuizPlayer() {
   const [remainingSec, setRemainingSec] = useState(0);
   const [isTimedOut, setIsTimedOut] = useState(false);
 
+  const [submitResult, setSubmitResult] =
+    useState<SubmitAnswerResponse | null>(null);
+  const [revealResult, setRevealResult] =
+    useState<RevealAnswerResponse | null>(null);
+
   const currentQuiz = useMemo(() => getCurrentQuiz(session), [session]);
   const progressLabel = useMemo(() => getProgressLabel(session), [session]);
   const progressPercent = useMemo(() => getProgressPercent(session), [session]);
+
+  const hasSubmitted = submitResult !== null;
+  const isBusy =
+    actionState === "submitting" ||
+    actionState === "revealing" ||
+    actionState === "advancing";
+
+  const revealedLatex =
+    revealResult?.correctLatex ??
+    submitResult?.correctLatex ??
+    (isTimedOut ? currentQuiz?.targetLatex : null);
 
   useEffect(() => {
     hydrate();
@@ -77,6 +115,7 @@ export function QuizPlayer() {
       }
 
       setLoadState("loading");
+      setActionState("idle");
       setErrorMessage(null);
 
       try {
@@ -84,6 +123,8 @@ export function QuizPlayer() {
 
         setSession(nextSession);
         setLatexInput("");
+        setSubmitResult(null);
+        setRevealResult(null);
         setLoadState("success");
       } catch (error) {
         setLoadState("error");
@@ -108,10 +149,19 @@ export function QuizPlayer() {
     setQuestionStartedAtMs(startedAtMs);
     setRemainingSec(currentQuiz.timeLimitSec);
     setIsTimedOut(false);
+    setSubmitResult(null);
+    setRevealResult(null);
+    setActionState("idle");
+    setErrorMessage(null);
   }, [currentQuiz?.id, currentQuiz]);
 
   useEffect(() => {
-    if (!currentQuiz || questionStartedAtMs === null || isTimedOut) {
+    if (
+      !currentQuiz ||
+      questionStartedAtMs === null ||
+      isTimedOut ||
+      hasSubmitted
+    ) {
       return;
     }
 
@@ -133,7 +183,117 @@ export function QuizPlayer() {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [currentQuiz, isTimedOut, questionStartedAtMs]);
+  }, [currentQuiz, hasSubmitted, isTimedOut, questionStartedAtMs]);
+
+  async function reloadSession() {
+    if (!token || !sessionId) {
+      return null;
+    }
+
+    const nextSession = await getQuizSession(token, sessionId);
+    setSession(nextSession);
+    return nextSession;
+  }
+
+  async function handleSubmitAnswer() {
+    if (!token || !sessionId || !currentQuiz) {
+      return;
+    }
+
+    if (hasSubmitted) {
+      setActionState("error");
+      setErrorMessage("Current question has already been submitted.");
+      return;
+    }
+
+    setActionState("submitting");
+    setErrorMessage(null);
+
+    try {
+      const response = await submitAnswer(token, sessionId, {
+        quizId: currentQuiz.id,
+        submittedLatex: latexInput,
+        responseTimeSec: calculateResponseTimeSec(questionStartedAtMs),
+        timedOut: isTimedOut,
+      });
+
+      setSubmitResult(response);
+      setRevealResult({
+        correctLatex: response.correctLatex,
+        acceptedVariants: response.acceptedVariants,
+      });
+      setRemainingSec((current) => (isTimedOut ? 0 : current));
+      setActionState("idle");
+
+      await reloadSession();
+    } catch (error) {
+      setActionState("error");
+      setErrorMessage(
+        error instanceof Error ? error.message : "Failed to submit answer.",
+      );
+    }
+  }
+
+  async function handleRevealAnswer() {
+    if (!token || !sessionId || !currentQuiz) {
+      return;
+    }
+
+    if (revealResult) {
+      return;
+    }
+
+    setActionState("revealing");
+    setErrorMessage(null);
+
+    try {
+      const response = await revealAnswer(token, sessionId, {
+        quizId: currentQuiz.id,
+      });
+
+      setRevealResult(response);
+      setActionState("idle");
+    } catch (error) {
+      setActionState("error");
+      setErrorMessage(
+        error instanceof Error ? error.message : "Failed to reveal answer.",
+      );
+    }
+  }
+
+  async function handleNextQuestion() {
+    if (!token || !sessionId) {
+      return;
+    }
+
+    setActionState("advancing");
+    setErrorMessage(null);
+
+    try {
+      const response = await nextQuestion(token, sessionId);
+
+      if (response.status === "completed") {
+        router.push(`/quiz/result/${response.sessionId}`);
+        return;
+      }
+
+      const nextSession = await getQuizSession(token, sessionId);
+
+      setSession(nextSession);
+      setLatexInput("");
+      setSubmitResult(null);
+      setRevealResult(null);
+      setIsTimedOut(false);
+      setRemainingSec(nextSession.quizzes[nextSession.currentIndex]?.timeLimitSec ?? 0);
+      setQuestionStartedAtMs(Date.now());
+      setActionState("idle");
+    } catch (error) {
+      setActionState("error");
+      setErrorMessage(
+        error instanceof Error ? error.message : "Failed to move next.",
+      );
+    }
+  }
 
   if (loadState === "loading" || loadState === "idle") {
     return (
@@ -216,20 +376,65 @@ export function QuizPlayer() {
           timeLimitSec={currentQuiz.timeLimitSec}
         />
 
-        {isTimedOut ? (
+        {submitResult ? (
+          <div
+            className={
+              submitResult.isCorrect
+                ? "rounded-2xl border border-green-200 bg-green-50 p-6"
+                : "rounded-2xl border border-red-200 bg-red-50 p-6"
+            }
+          >
+            <p
+              className={
+                submitResult.isCorrect
+                  ? "text-sm font-medium text-green-700"
+                  : "text-sm font-medium text-red-700"
+              }
+            >
+              {submitResult.isCorrect ? "Correct" : "Wrong"}
+            </p>
+            <h2
+              className={
+                submitResult.isCorrect
+                  ? "mt-2 text-xl font-semibold tracking-tight text-green-950"
+                  : "mt-2 text-xl font-semibold tracking-tight text-red-950"
+              }
+            >
+              Score: {submitResult.score}
+            </h2>
+            <p
+              className={
+                submitResult.isCorrect
+                  ? "mt-3 text-sm text-green-700"
+                  : "mt-3 text-sm text-red-700"
+              }
+            >
+              Correct answer is now visible. Move to the next question when
+              ready.
+            </p>
+          </div>
+        ) : null}
+
+        {isTimedOut && !submitResult ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
             <p className="text-sm font-medium text-red-700">Time expired</p>
             <h2 className="mt-2 text-xl font-semibold tracking-tight text-red-950">
               Answer revealed
             </h2>
             <p className="mt-3 text-sm text-red-700">
-              The answer is visible because the timer reached zero. Submit and
-              next behavior will be connected in Step 17.
+              You can still submit after timeout. The backend will score it with
+              timeout timing.
             </p>
             <pre className="mt-5 overflow-x-auto rounded-2xl bg-white px-4 py-3 font-mono text-sm text-red-900">
               {currentQuiz.targetLatex}
             </pre>
           </div>
+        ) : null}
+
+        {errorMessage ? (
+          <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {errorMessage}
+          </p>
         ) : null}
 
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
@@ -260,7 +465,7 @@ export function QuizPlayer() {
               onChange={(event) => setLatexInput(event.target.value)}
               rows={10}
               autoFocus
-              disabled={isTimedOut}
+              disabled={hasSubmitted}
               className="mt-3 w-full resize-none rounded-2xl border border-neutral-300 bg-white px-4 py-3 font-mono text-sm text-neutral-950 outline-none transition-[border-color,box-shadow,opacity] placeholder:text-neutral-400 focus:border-neutral-950 focus:shadow-[0_0_0_3px_rgba(0,0,0,0.08)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70"
               placeholder="Type LaTeX here, e.g. x^2"
             />
@@ -270,7 +475,7 @@ export function QuizPlayer() {
             <button
               type="button"
               onClick={() => setLatexInput(currentQuiz.targetLatex)}
-              disabled={isTimedOut}
+              disabled={hasSubmitted}
               className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition-[background-color,color,border-color,opacity] hover:border-neutral-400 hover:bg-neutral-100 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Fill target for preview test
@@ -278,16 +483,41 @@ export function QuizPlayer() {
             <button
               type="button"
               onClick={() => setLatexInput("")}
-              disabled={isTimedOut}
+              disabled={hasSubmitted}
               className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition-[background-color,color,border-color,opacity] hover:border-neutral-400 hover:bg-neutral-100 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Clear
             </button>
           </div>
 
-          <p className="mt-4 text-xs text-neutral-500">
-            Submit/reveal/next actions will be implemented in Step 17.
-          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleSubmitAnswer}
+              disabled={isBusy || hasSubmitted}
+              className="rounded-xl bg-neutral-950 px-4 py-2.5 text-sm font-medium text-white transition-[background-color,opacity] hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {actionState === "submitting" ? "Submitting..." : "Submit answer"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleRevealAnswer}
+              disabled={isBusy || Boolean(revealResult)}
+              className="rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 transition-[background-color,color,border-color,opacity] hover:border-neutral-400 hover:bg-neutral-100 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {actionState === "revealing" ? "Revealing..." : "Show answer"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleNextQuestion}
+              disabled={isBusy}
+              className="rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 transition-[background-color,color,border-color,opacity] hover:border-neutral-400 hover:bg-neutral-100 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {actionState === "advancing" ? "Loading next..." : "Next question"}
+            </button>
+          </div>
         </div>
       </section>
 
@@ -312,21 +542,27 @@ export function QuizPlayer() {
             Current Target
           </h2>
           <p className="mt-3 text-sm text-neutral-600">
-            This is visible in v1 for development verification. It will be moved
-            behind reveal behavior in later steps.
+            In production behavior, this should only be visible after reveal,
+            timeout, or submit.
           </p>
 
-          <pre className="mt-5 overflow-x-auto rounded-2xl bg-neutral-950 px-4 py-3 text-sm text-white">
-            {currentQuiz.targetLatex}
-          </pre>
+          {revealedLatex ? (
+            <pre className="mt-5 overflow-x-auto rounded-2xl bg-neutral-950 px-4 py-3 text-sm text-white">
+              {revealedLatex}
+            </pre>
+          ) : (
+            <div className="mt-5 rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 px-4 py-8 text-center text-sm text-neutral-500">
+              Answer hidden.
+            </div>
+          )}
 
-          {currentQuiz.acceptedVariants.length > 0 ? (
+          {revealResult?.acceptedVariants.length ? (
             <div className="mt-5">
               <p className="text-sm font-medium text-neutral-800">
                 Accepted variants
               </p>
               <ul className="mt-2 space-y-2">
-                {currentQuiz.acceptedVariants.map((variant) => (
+                {revealResult.acceptedVariants.map((variant) => (
                   <li
                     key={variant}
                     className="rounded-xl bg-neutral-50 px-3 py-2 font-mono text-sm text-neutral-700"
@@ -336,11 +572,7 @@ export function QuizPlayer() {
                 ))}
               </ul>
             </div>
-          ) : (
-            <p className="mt-5 rounded-xl bg-neutral-50 px-3 py-2 text-sm text-neutral-500">
-              No accepted variants.
-            </p>
-          )}
+          ) : null}
         </div>
       </aside>
     </div>
