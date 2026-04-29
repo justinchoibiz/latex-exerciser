@@ -426,6 +426,7 @@ class MemoryStore:
         user_id: str,
         level_min: int,
         level_max: int,
+        time_limit_sec_override: int | None = None,
     ) -> dict[str, Any]:
         selected_quizzes: list[dict[str, Any]] = []
 
@@ -435,10 +436,23 @@ class MemoryStore:
             if len(level_quizzes) < 10:
                 raise ValueError("Not enough quizzes for selected level range.")
 
-            selected_quizzes.extend(level_quizzes[:10])
+            selected_level_quizzes = level_quizzes[:10]
+
+            if time_limit_sec_override is not None:
+                selected_level_quizzes = [
+                    {
+                        **quiz,
+                        "timeLimitSec": time_limit_sec_override,
+                    }
+                    for quiz in selected_level_quizzes
+                ]
+
+            selected_quizzes.extend(selected_level_quizzes)
 
         session_id = f"session_{self.session_id_sequence}"
         self.session_id_sequence += 1
+
+        started_at = utc_now_iso()
 
         session = {
             "id": session_id,
@@ -449,7 +463,8 @@ class MemoryStore:
             "currentIndex": 0,
             "answers": [],
             "status": "playing",
-            "startedAt": utc_now_iso(),
+            "startedAt": started_at,
+            "currentQuestionStartedAt": started_at,
             "completedAt": None,
         }
 
@@ -545,6 +560,7 @@ class MemoryStore:
             session["currentIndex"] = len(session["quizzes"]) - 1
         else:
             session["currentIndex"] = next_index
+            session["currentQuestionStartedAt"] = utc_now_iso()
 
         return deepcopy(session)
 

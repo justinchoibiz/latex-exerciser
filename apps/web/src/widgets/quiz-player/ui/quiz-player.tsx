@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { useAuthStore } from "@/entities/auth";
 import type {
   Quiz,
+  QuizAnswer,
   QuizSession,
   RevealAnswerResponse,
   SubmitAnswerResponse,
@@ -19,6 +21,7 @@ import {
   submitAnswer,
 } from "@/features/quiz";
 import { calculateRemainingTime } from "@/features/quiz/lib/timer";
+import { getErrorMessage } from "@/shared/api/error";
 import { LatexPreview } from "@/shared/ui";
 
 type LoadState = "idle" | "loading" | "success" | "error";
@@ -30,6 +33,19 @@ function getCurrentQuiz(session: QuizSession | null): Quiz | null {
   }
 
   return session.quizzes[session.currentIndex] ?? null;
+}
+
+function getCurrentAnswer(
+  session: QuizSession | null,
+  currentQuiz: Quiz | null,
+): QuizAnswer | null {
+  if (!session || !currentQuiz) {
+    return null;
+  }
+
+  return (
+    session.answers.find((answer) => answer.quizId === currentQuiz.id) ?? null
+  );
 }
 
 function getProgressLabel(session: QuizSession | null) {
@@ -53,7 +69,40 @@ function calculateResponseTimeSec(questionStartedAtMs: number | null) {
     return 0;
   }
 
-  return Math.max(0, Number(((Date.now() - questionStartedAtMs) / 1000).toFixed(2)));
+  return Math.max(
+    0,
+    Number(((Date.now() - questionStartedAtMs) / 1000).toFixed(2)),
+  );
+}
+
+function parseIsoToMs(value: string | null | undefined) {
+  if (!value) {
+    return Date.now();
+  }
+
+  const parsed = Date.parse(value);
+
+  if (Number.isNaN(parsed)) {
+    return Date.now();
+  }
+
+  return parsed;
+}
+
+function buildSubmitResultFromAnswer(
+  answer: QuizAnswer | null,
+  currentQuiz: Quiz | null,
+): SubmitAnswerResponse | null {
+  if (!answer || !currentQuiz) {
+    return null;
+  }
+
+  return {
+    isCorrect: answer.isCorrect,
+    score: answer.score,
+    correctLatex: currentQuiz.targetLatex,
+    acceptedVariants: currentQuiz.acceptedVariants,
+  };
 }
 
 export function QuizPlayer() {
@@ -76,25 +125,35 @@ export function QuizPlayer() {
   const [remainingSec, setRemainingSec] = useState(0);
   const [isTimedOut, setIsTimedOut] = useState(false);
 
-  const [submitResult, setSubmitResult] =
+  const [localSubmitResult, setLocalSubmitResult] =
     useState<SubmitAnswerResponse | null>(null);
   const [revealResult, setRevealResult] =
     useState<RevealAnswerResponse | null>(null);
 
   const currentQuiz = useMemo(() => getCurrentQuiz(session), [session]);
+  const currentQuizId = currentQuiz?.id ?? null;
+
+  const currentAnswer = useMemo(() => {
+    return getCurrentAnswer(session, currentQuiz);
+  }, [session, currentQuiz]);
+
+  const persistedSubmitResult = useMemo(() => {
+    return buildSubmitResultFromAnswer(currentAnswer, currentQuiz);
+  }, [currentAnswer, currentQuiz]);
+
+  const submitResult = localSubmitResult ?? persistedSubmitResult;
+
   const progressLabel = useMemo(() => getProgressLabel(session), [session]);
   const progressPercent = useMemo(() => getProgressPercent(session), [session]);
 
-  const hasSubmitted = submitResult !== null;
+  const hasSubmitted = Boolean(submitResult);
   const isBusy =
     actionState === "submitting" ||
     actionState === "revealing" ||
     actionState === "advancing";
 
   const revealedLatex =
-    revealResult?.correctLatex ??
-    submitResult?.correctLatex ??
-    (isTimedOut ? currentQuiz?.targetLatex : null);
+    revealResult?.correctLatex ?? submitResult?.correctLatex ?? null;
 
   useEffect(() => {
     hydrate();
@@ -123,16 +182,15 @@ export function QuizPlayer() {
 
         setSession(nextSession);
         setLatexInput("");
-        setSubmitResult(null);
+        setLocalSubmitResult(null);
         setRevealResult(null);
         setLoadState("success");
       } catch (error) {
+        const message = getErrorMessage(error, "Failed to load quiz session.");
+
         setLoadState("error");
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "Failed to load quiz session.",
-        );
+        setErrorMessage(message);
+        toast.error(message);
       }
     }
 
@@ -140,20 +198,25 @@ export function QuizPlayer() {
   }, [sessionId, token]);
 
   useEffect(() => {
-    if (!currentQuiz) {
+    if (!session || !currentQuiz) {
       return;
     }
 
-    const startedAtMs = Date.now();
+    const startedAtMs = parseIsoToMs(session.currentQuestionStartedAt);
+    const nextRemainingSec = calculateRemainingTime(
+      startedAtMs,
+      currentQuiz.timeLimitSec,
+      Date.now(),
+    );
 
     setQuestionStartedAtMs(startedAtMs);
-    setRemainingSec(currentQuiz.timeLimitSec);
-    setIsTimedOut(false);
-    setSubmitResult(null);
+    setRemainingSec(nextRemainingSec);
+    setIsTimedOut(nextRemainingSec <= 0);
+    setLocalSubmitResult(null);
     setRevealResult(null);
     setActionState("idle");
     setErrorMessage(null);
-  }, [currentQuiz?.id, currentQuiz]);
+  }, [currentQuizId, session?.currentQuestionStartedAt]);
 
   useEffect(() => {
     if (
@@ -192,6 +255,7 @@ export function QuizPlayer() {
 
     const nextSession = await getQuizSession(token, sessionId);
     setSession(nextSession);
+
     return nextSession;
   }
 
@@ -200,9 +264,21 @@ export function QuizPlayer() {
       return;
     }
 
-    if (hasSubmitted) {
+    if (isTimedOut) {
+      const message = "Cannot submit after timeout.";
+
       setActionState("error");
-      setErrorMessage("Current question has already been submitted.");
+      setErrorMessage(message);
+      toast.error(message);
+      return;
+    }
+
+    if (hasSubmitted) {
+      const message = "Current question has already been submitted.";
+
+      setActionState("error");
+      setErrorMessage(message);
+      toast.error(message);
       return;
     }
 
@@ -214,23 +290,30 @@ export function QuizPlayer() {
         quizId: currentQuiz.id,
         submittedLatex: latexInput,
         responseTimeSec: calculateResponseTimeSec(questionStartedAtMs),
-        timedOut: isTimedOut,
+        timedOut: false,
       });
 
-      setSubmitResult(response);
+      setLocalSubmitResult(response);
       setRevealResult({
         correctLatex: response.correctLatex,
         acceptedVariants: response.acceptedVariants,
       });
-      setRemainingSec((current) => (isTimedOut ? 0 : current));
+
+      if (response.isCorrect) {
+        toast.success("Correct answer.");
+      } else {
+        toast.error("Wrong answer.");
+      }
+
       setActionState("idle");
 
       await reloadSession();
     } catch (error) {
+      const message = getErrorMessage(error, "Failed to submit answer.");
+
       setActionState("error");
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to submit answer.",
-      );
+      setErrorMessage(message);
+      toast.error(message);
     }
   }
 
@@ -253,11 +336,13 @@ export function QuizPlayer() {
 
       setRevealResult(response);
       setActionState("idle");
+      toast.success("Answer revealed.");
     } catch (error) {
+      const message = getErrorMessage(error, "Failed to reveal answer.");
+
       setActionState("error");
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to reveal answer.",
-      );
+      setErrorMessage(message);
+      toast.error(message);
     }
   }
 
@@ -273,25 +358,38 @@ export function QuizPlayer() {
       const response = await nextQuestion(token, sessionId);
 
       if (response.status === "completed") {
+        toast.success("Quiz completed.");
         router.push(`/quiz/result/${response.sessionId}`);
         return;
       }
 
       const nextSession = await getQuizSession(token, sessionId);
+      const nextQuiz = nextSession.quizzes[nextSession.currentIndex] ?? null;
+      const nextStartedAtMs = parseIsoToMs(nextSession.currentQuestionStartedAt);
 
       setSession(nextSession);
       setLatexInput("");
-      setSubmitResult(null);
+      setLocalSubmitResult(null);
       setRevealResult(null);
       setIsTimedOut(false);
-      setRemainingSec(nextSession.quizzes[nextSession.currentIndex]?.timeLimitSec ?? 0);
-      setQuestionStartedAtMs(Date.now());
-      setActionState("idle");
-    } catch (error) {
-      setActionState("error");
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to move next.",
+      setRemainingSec(
+        nextQuiz
+          ? calculateRemainingTime(
+              nextStartedAtMs,
+              nextQuiz.timeLimitSec,
+              Date.now(),
+            )
+          : 0,
       );
+      setQuestionStartedAtMs(nextStartedAtMs);
+      setActionState("idle");
+      toast.success("Moved to next question.");
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to move next.");
+
+      setActionState("error");
+      setErrorMessage(message);
+      toast.error(message);
     }
   }
 
@@ -419,15 +517,12 @@ export function QuizPlayer() {
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
             <p className="text-sm font-medium text-red-700">Time expired</p>
             <h2 className="mt-2 text-xl font-semibold tracking-tight text-red-950">
-              Answer revealed
+              Submission closed
             </h2>
             <p className="mt-3 text-sm text-red-700">
-              You can still submit after timeout. The backend will score it with
-              timeout timing.
+              Time is over. You can reveal the answer, then move to the next
+              question.
             </p>
-            <pre className="mt-5 overflow-x-auto rounded-2xl bg-white px-4 py-3 font-mono text-sm text-red-900">
-              {currentQuiz.targetLatex}
-            </pre>
           </div>
         ) : null}
 
@@ -465,7 +560,7 @@ export function QuizPlayer() {
               onChange={(event) => setLatexInput(event.target.value)}
               rows={10}
               autoFocus
-              disabled={hasSubmitted}
+              disabled={hasSubmitted || isTimedOut}
               className="mt-3 w-full resize-none rounded-2xl border border-neutral-300 bg-white px-4 py-3 font-mono text-sm text-neutral-950 outline-none transition-[border-color,box-shadow,opacity] placeholder:text-neutral-400 focus:border-neutral-950 focus:shadow-[0_0_0_3px_rgba(0,0,0,0.08)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70"
               placeholder="Type LaTeX here, e.g. x^2"
             />
@@ -475,7 +570,7 @@ export function QuizPlayer() {
             <button
               type="button"
               onClick={() => setLatexInput(currentQuiz.targetLatex)}
-              disabled={hasSubmitted}
+              disabled={hasSubmitted || isTimedOut}
               className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition-[background-color,color,border-color,opacity] hover:border-neutral-400 hover:bg-neutral-100 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Fill target for preview test
@@ -483,7 +578,7 @@ export function QuizPlayer() {
             <button
               type="button"
               onClick={() => setLatexInput("")}
-              disabled={hasSubmitted}
+              disabled={hasSubmitted || isTimedOut}
               className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition-[background-color,color,border-color,opacity] hover:border-neutral-400 hover:bg-neutral-100 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Clear
@@ -494,7 +589,7 @@ export function QuizPlayer() {
             <button
               type="button"
               onClick={handleSubmitAnswer}
-              disabled={isBusy || hasSubmitted}
+              disabled={isBusy || hasSubmitted || isTimedOut}
               className="rounded-xl bg-neutral-950 px-4 py-2.5 text-sm font-medium text-white transition-[background-color,opacity] hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {actionState === "submitting" ? "Submitting..." : "Submit answer"}

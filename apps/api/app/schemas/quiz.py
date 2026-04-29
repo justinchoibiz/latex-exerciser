@@ -105,6 +105,7 @@ class QuizSessionResponse(BaseModel):
     answers: list[QuizAnswerResponse]
     status: str
     startedAt: str
+    currentQuestionStartedAt: str
     completedAt: str | None = None
 
     @model_validator(mode="after")

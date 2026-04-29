@@ -1,15 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { type FormEvent, useMemo, useState } from "react";
+import { toast } from "sonner";
 
-import { login } from "@/features/auth/api/auth-api";
 import { useAuthStore } from "@/entities/auth";
+import { login } from "@/features/auth/api/auth-api";
+import { getErrorMessage } from "@/shared/api/error";
+
+function getSafeNextPath(next: string | null) {
+  if (!next) {
+    return "/quiz/setup";
+  }
+
+  if (!next.startsWith("/") || next.startsWith("//")) {
+    return "/quiz/setup";
+  }
+
+  if (next === "/login" || next === "/signup") {
+    return "/quiz/setup";
+  }
+
+  return next;
+}
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const setAuth = useAuthStore((state) => state.setAuth);
+
+  const nextPath = useMemo(() => {
+    return getSafeNextPath(searchParams.get("next"));
+  }, [searchParams]);
 
   const [email, setEmail] = useState("session@example.com");
   const [password, setPassword] = useState("password123");
@@ -29,11 +52,13 @@ export function LoginForm() {
       });
 
       setAuth(auth);
-      router.push("/quiz/setup");
+      toast.success("Logged in.");
+      router.push(nextPath);
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to login.",
-      );
+      const message = getErrorMessage(error, "Failed to login.");
+
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }

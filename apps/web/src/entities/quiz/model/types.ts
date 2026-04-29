@@ -29,6 +29,7 @@ export type QuizSession = {
   answers: QuizAnswer[];
   status: QuizSessionStatus;
   startedAt: string;
+  currentQuestionStartedAt: string;
   completedAt: string | null;
 };
 

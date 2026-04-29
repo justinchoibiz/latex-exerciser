@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "sonner";
+import { getErrorMessage } from "@/shared/api/error";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
@@ -74,11 +76,10 @@ export function QuizSetupForm() {
           levelMax: settings.defaultLevelMax,
         });
       } catch (error) {
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "Failed to load quiz defaults.",
-        );
+        const message = getErrorMessage(error, "Failed to load quiz defaults.");
+
+        setErrorMessage(message);
+        toast.error(message);
       } finally {
         setIsLoadingDefaults(false);
       }
@@ -104,14 +105,20 @@ export function QuizSetupForm() {
     event.preventDefault();
 
     if (!token) {
+      const message = "Login is required to start a quiz session.";
+
       setSubmitState("error");
-      setErrorMessage("Login is required to start a quiz session.");
+      setErrorMessage(message);
+      toast.error(message);
       return;
     }
 
     if (formValue.levelMin > formValue.levelMax) {
+      const message = "Start level must be less than or equal to end level.";
+
       setSubmitState("error");
-      setErrorMessage("Start level must be less than or equal to end level.");
+      setErrorMessage(message);
+      toast.error(message);
       return;
     }
 
@@ -124,14 +131,14 @@ export function QuizSetupForm() {
         levelMax: formValue.levelMax,
       });
 
+      toast.success("Quiz session created.");
       router.push(`/quiz/play?sessionId=${response.sessionId}`);
     } catch (error) {
+      const message = getErrorMessage(error, "Failed to create quiz session.");
+
       setSubmitState("error");
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Failed to create quiz session.",
-      );
+      setErrorMessage(message);
+      toast.error(message);
     }
   }
 

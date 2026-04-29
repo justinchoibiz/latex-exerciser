@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "sonner";
+import { getErrorMessage } from "@/shared/api/error";
 import { useEffect, useMemo, useState } from "react";
 
 import type { Quiz } from "@/entities/quiz";
@@ -49,10 +51,11 @@ export function QuizDebugList() {
         setQuizzes(nextQuizzes);
         setLoadState("success");
       } catch (error) {
+        const message = getErrorMessage(error, "Failed to load quizzes.");
+
         setLoadState("error");
-        setErrorMessage(
-          error instanceof Error ? error.message : "Failed to load quizzes.",
-        );
+        setErrorMessage(message);
+        toast.error(message);
       }
     }
 

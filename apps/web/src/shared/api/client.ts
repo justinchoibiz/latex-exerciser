@@ -1,3 +1,4 @@
+import { ApiError, parseApiErrorMessage } from "@/shared/api/error";
 import { env } from "@/shared/config/env";
 
 type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
@@ -7,6 +8,20 @@ type ApiClientOptions<TBody> = {
   body?: TBody;
   token?: string | null;
 };
+
+async function readJsonSafely(response: Response) {
+  const contentType = response.headers.get("content-type");
+
+  if (!contentType?.includes("application/json")) {
+    return null;
+  }
+
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
 
 export async function apiClient<TResponse, TBody = unknown>(
   path: string,
@@ -22,11 +37,18 @@ export async function apiClient<TResponse, TBody = unknown>(
     cache: "no-store",
   });
 
-  if (!response.ok) {
-    const message = await response.text();
+  const payload = await readJsonSafely(response);
 
-    throw new Error(message || `Request failed with status ${response.status}`);
+  if (!response.ok) {
+    const fallbackMessage = `Request failed with status ${response.status}`;
+    const message = parseApiErrorMessage(payload, fallbackMessage);
+
+    throw new ApiError({
+      status: response.status,
+      message,
+      payload,
+    });
   }
 
-  return response.json() as Promise<TResponse>;
+  return payload as TResponse;
 }

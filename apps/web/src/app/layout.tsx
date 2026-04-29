@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 
+import { Toaster } from "@/shared/ui";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -27,6 +29,7 @@ export default function RootLayout({
     <html lang="ko">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         {children}
+        <Toaster />
       </body>
     </html>
   );

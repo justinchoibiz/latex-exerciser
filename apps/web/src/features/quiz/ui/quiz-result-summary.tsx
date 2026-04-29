@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "sonner";
+import { getErrorMessage } from "@/shared/api/error";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -90,8 +92,11 @@ export function QuizResultSummary({ sessionId }: QuizResultSummaryProps) {
   useEffect(() => {
     async function loadResult() {
       if (!token) {
+        const message = "Login is required to view quiz results.";
+
         setLoadState("error");
-        setErrorMessage("Login is required to view quiz results.");
+        setErrorMessage(message);
+        toast.error(message);
         return;
       }
 
@@ -104,12 +109,11 @@ export function QuizResultSummary({ sessionId }: QuizResultSummaryProps) {
         setResult(nextResult);
         setLoadState("success");
       } catch (error) {
+        const message = getErrorMessage(error, "Failed to load quiz result.");
+
         setLoadState("error");
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "Failed to load quiz result.",
-        );
+        setErrorMessage(message);
+        toast.error(message);
       }
     }
 

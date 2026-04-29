@@ -40,11 +40,14 @@ def create_quiz_session(
     payload: CreateQuizSessionRequest,
     current_user: Annotated[dict[str, str], Depends(get_current_user)],
 ) -> CreateQuizSessionResponse:
+    settings = memory_store.get_settings_by_user_id(current_user["id"])
+
     try:
         session = memory_store.create_quiz_session(
             user_id=current_user["id"],
             level_min=payload.levelMin,
             level_max=payload.levelMax,
+            time_limit_sec_override=settings["defaultTimeLimit"],
         )
     except ValueError as error:
         raise HTTPException(
@@ -97,6 +100,12 @@ def submit_answer(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="quizId does not match current question.",
+        )
+
+    if payload.timedOut:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot submit after timeout.",
         )
 
     settings = memory_store.get_settings_by_user_id(current_user["id"])

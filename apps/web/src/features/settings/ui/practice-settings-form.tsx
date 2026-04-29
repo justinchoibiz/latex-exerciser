@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "sonner";
+import { getErrorMessage } from "@/shared/api/error";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import { useAuthStore } from "@/entities/auth";
@@ -57,9 +59,9 @@ export function PracticeSettingsForm() {
         const settings = await getSettings(token);
         setFormValue(settings);
       } catch (error) {
-        setErrorMessage(
-          error instanceof Error ? error.message : "Failed to load settings.",
-        );
+        const message = getErrorMessage(error, "Failed to load settings.");
+        setErrorMessage(message);
+        toast.error(message);
       } finally {
         setIsLoading(false);
       }
@@ -85,16 +87,20 @@ export function PracticeSettingsForm() {
     event.preventDefault();
 
     if (!token) {
+      const message = "Login is required to save settings.";
       setSaveState("error");
-      setErrorMessage("Login is required to save settings.");
+      setErrorMessage(message);
+      toast.error(message);
+      
       return;
     }
 
     if (formValue.defaultLevelMin > formValue.defaultLevelMax) {
+      const message =
+      "Default minimum level must be less than or equal to maximum level.";
       setSaveState("error");
-      setErrorMessage(
-        "Default minimum level must be less than or equal to maximum level.",
-      );
+      setErrorMessage(message);
+      toast.error(message);
       return;
     }
 
@@ -106,11 +112,13 @@ export function PracticeSettingsForm() {
 
       setFormValue(nextSettings);
       setSaveState("saved");
+      toast.success("Settings saved.");
     } catch (error) {
+      const message = getErrorMessage(error, "Failed to save settings.");
+
       setSaveState("error");
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to save settings.",
-      );
+      setErrorMessage(message);
+      toast.error(message);
     }
   }
 
