@@ -1,0 +1,1 @@
+export { QuizPlayer } from "@/widgets/quiz-player/ui/quiz-player";
