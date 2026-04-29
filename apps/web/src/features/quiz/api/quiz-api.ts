@@ -2,6 +2,7 @@ import type {
   CreateQuizSessionRequest,
   CreateQuizSessionResponse,
   NextQuestionResponse,
+  QuizResult,
   QuizSession,
   RevealAnswerRequest,
   RevealAnswerResponse,
@@ -70,4 +71,11 @@ export function nextQuestion(token: string, sessionId: string) {
       body: {},
     },
   );
+}
+
+export function getQuizResult(token: string, sessionId: string) {
+  return apiClient<QuizResult>(`/quiz/sessions/${sessionId}/result`, {
+    method: "GET",
+    token,
+  });
 }

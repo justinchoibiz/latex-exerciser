@@ -1,5 +1,6 @@
 export {
   createQuizSession,
+  getQuizResult,
   getQuizSession,
   nextQuestion,
   revealAnswer,
@@ -8,3 +9,4 @@ export {
 
 export { QuizSetupForm } from "@/features/quiz/ui/quiz-setup-form";
 export { QuestionTimer } from "@/features/quiz/ui/question-timer";
+export { QuizResultSummary } from "@/features/quiz/ui/quiz-result-summary";
