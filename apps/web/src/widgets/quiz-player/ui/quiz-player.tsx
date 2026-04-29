@@ -6,7 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useAuthStore } from "@/entities/auth";
 import type { Quiz, QuizSession } from "@/entities/quiz";
-import { getQuizSession } from "@/features/quiz";
+import { getQuizSession, QuestionTimer } from "@/features/quiz";
+import { calculateRemainingTime } from "@/features/quiz/lib/timer";
 import { LatexPreview } from "@/shared/ui";
 
 type LoadState = "idle" | "loading" | "success" | "error";
@@ -46,6 +47,12 @@ export function QuizPlayer() {
   const [latexInput, setLatexInput] = useState("");
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [questionStartedAtMs, setQuestionStartedAtMs] = useState<number | null>(
+    null,
+  );
+  const [remainingSec, setRemainingSec] = useState(0);
+  const [isTimedOut, setIsTimedOut] = useState(false);
 
   const currentQuiz = useMemo(() => getCurrentQuiz(session), [session]);
   const progressLabel = useMemo(() => getProgressLabel(session), [session]);
@@ -90,6 +97,43 @@ export function QuizPlayer() {
 
     void loadSession();
   }, [sessionId, token]);
+
+  useEffect(() => {
+    if (!currentQuiz) {
+      return;
+    }
+
+    const startedAtMs = Date.now();
+
+    setQuestionStartedAtMs(startedAtMs);
+    setRemainingSec(currentQuiz.timeLimitSec);
+    setIsTimedOut(false);
+  }, [currentQuiz?.id, currentQuiz]);
+
+  useEffect(() => {
+    if (!currentQuiz || questionStartedAtMs === null || isTimedOut) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      const nextRemainingSec = calculateRemainingTime(
+        questionStartedAtMs,
+        currentQuiz.timeLimitSec,
+        Date.now(),
+      );
+
+      setRemainingSec(nextRemainingSec);
+
+      if (nextRemainingSec <= 0) {
+        setIsTimedOut(true);
+        window.clearInterval(intervalId);
+      }
+    }, 250);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [currentQuiz, isTimedOut, questionStartedAtMs]);
 
   if (loadState === "loading" || loadState === "idle") {
     return (
@@ -167,6 +211,27 @@ export function QuizPlayer() {
           </div>
         </div>
 
+        <QuestionTimer
+          remainingSec={remainingSec}
+          timeLimitSec={currentQuiz.timeLimitSec}
+        />
+
+        {isTimedOut ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
+            <p className="text-sm font-medium text-red-700">Time expired</p>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight text-red-950">
+              Answer revealed
+            </h2>
+            <p className="mt-3 text-sm text-red-700">
+              The answer is visible because the timer reached zero. Submit and
+              next behavior will be connected in Step 17.
+            </p>
+            <pre className="mt-5 overflow-x-auto rounded-2xl bg-white px-4 py-3 font-mono text-sm text-red-900">
+              {currentQuiz.targetLatex}
+            </pre>
+          </div>
+        ) : null}
+
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-medium text-neutral-500">Prompt</p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight text-neutral-950">
@@ -195,7 +260,8 @@ export function QuizPlayer() {
               onChange={(event) => setLatexInput(event.target.value)}
               rows={10}
               autoFocus
-              className="mt-3 w-full resize-none rounded-2xl border border-neutral-300 bg-white px-4 py-3 font-mono text-sm text-neutral-950 outline-none transition-[border-color,box-shadow] placeholder:text-neutral-400 focus:border-neutral-950 focus:shadow-[0_0_0_3px_rgba(0,0,0,0.08)]"
+              disabled={isTimedOut}
+              className="mt-3 w-full resize-none rounded-2xl border border-neutral-300 bg-white px-4 py-3 font-mono text-sm text-neutral-950 outline-none transition-[border-color,box-shadow,opacity] placeholder:text-neutral-400 focus:border-neutral-950 focus:shadow-[0_0_0_3px_rgba(0,0,0,0.08)] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70"
               placeholder="Type LaTeX here, e.g. x^2"
             />
           </label>
@@ -204,14 +270,16 @@ export function QuizPlayer() {
             <button
               type="button"
               onClick={() => setLatexInput(currentQuiz.targetLatex)}
-              className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition-[background-color,color,border-color] hover:border-neutral-400 hover:bg-neutral-100 hover:text-neutral-950"
+              disabled={isTimedOut}
+              className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition-[background-color,color,border-color,opacity] hover:border-neutral-400 hover:bg-neutral-100 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Fill target for preview test
             </button>
             <button
               type="button"
               onClick={() => setLatexInput("")}
-              className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition-[background-color,color,border-color] hover:border-neutral-400 hover:bg-neutral-100 hover:text-neutral-950"
+              disabled={isTimedOut}
+              className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition-[background-color,color,border-color,opacity] hover:border-neutral-400 hover:bg-neutral-100 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Clear
             </button>
