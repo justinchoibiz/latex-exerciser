@@ -179,7 +179,7 @@ export function QuizDebugList() {
                       <p className="mt-4 text-xs font-medium uppercase tracking-wide text-neutral-400">
                         Accepted variants
                       </p>
-                      <p className="mt-2 break-words font-mono text-sm text-neutral-700">
+                      <p className="mt-2 wrap-break-words font-mono text-sm text-neutral-700">
                         {formatAcceptedVariants(quiz.acceptedVariants)}
                       </p>
                     </div>
