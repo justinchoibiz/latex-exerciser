@@ -67,14 +67,9 @@ export function QuizDebugList() {
       <div className="rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-medium text-neutral-500">Quiz Data</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-              Quiz Debug List
+              Quiz Database
             </h1>
-            <p className="mt-3 max-w-2xl text-sm text-neutral-600">
-              Inspect backend quiz seed data by difficulty level. This page is
-              for Mock Up verification.
-            </p>
           </div>
 
           <label className="block min-w-48">
@@ -99,34 +94,6 @@ export function QuizDebugList() {
           </label>
         </div>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
-            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-              Loaded quizzes
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-neutral-950">
-              {quizzes.length}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
-            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-              Filter
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-neutral-950">
-              {selectedLevel === "all" ? "All" : `Level ${selectedLevel}`}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
-            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-              API
-            </p>
-            <p className="mt-2 text-sm font-medium text-neutral-950">
-              GET /api/quizzes
-            </p>
-          </div>
-        </div>
       </div>
 
       {loadState === "loading" || loadState === "idle" ? (

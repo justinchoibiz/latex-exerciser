@@ -61,7 +61,9 @@ function getProgressPercent(session: QuizSession | null) {
     return 0;
   }
 
-  return Math.round(((session.currentIndex + 1) / session.quizzes.length) * 100);
+  return Math.round(
+    ((session.currentIndex + 1) / session.quizzes.length) * 100,
+  );
 }
 
 function calculateResponseTimeSec(questionStartedAtMs: number | null) {
@@ -127,8 +129,9 @@ export function QuizPlayer() {
 
   const [localSubmitResult, setLocalSubmitResult] =
     useState<SubmitAnswerResponse | null>(null);
-  const [revealResult, setRevealResult] =
-    useState<RevealAnswerResponse | null>(null);
+  const [revealResult, setRevealResult] = useState<RevealAnswerResponse | null>(
+    null,
+  );
 
   const currentQuiz = useMemo(() => getCurrentQuiz(session), [session]);
   const currentQuizId = currentQuiz?.id ?? null;
@@ -365,7 +368,9 @@ export function QuizPlayer() {
 
       const nextSession = await getQuizSession(token, sessionId);
       const nextQuiz = nextSession.quizzes[nextSession.currentIndex] ?? null;
-      const nextStartedAtMs = parseIsoToMs(nextSession.currentQuestionStartedAt);
+      const nextStartedAtMs = parseIsoToMs(
+        nextSession.currentQuestionStartedAt,
+      );
 
       setSession(nextSession);
       setLatexInput("");
@@ -445,28 +450,18 @@ export function QuizPlayer() {
               <p className="text-sm font-medium text-neutral-500">
                 {progressLabel}
               </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-                Level {currentQuiz.difficultyLevel}
-              </h1>
-              <p className="mt-3 text-sm text-neutral-600">
-                Type the LaTeX expression that matches the prompt.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
-              <p className="font-medium text-neutral-950">
-                {currentQuiz.timeLimitSec}s
-              </p>
-              <p className="text-xs text-neutral-500">time limit</p>
             </div>
           </div>
 
-          <div className="mt-6 h-2 overflow-hidden rounded-full bg-neutral-100">
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-neutral-100">
             <div
               className="h-full rounded-full bg-neutral-950 transition-[width]"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
+          <h2 className="mt-6 text-2xl font-semibold tracking-tight text-neutral-950">
+            [Level {currentQuiz.difficultyLevel}] {currentQuiz.promptText}
+          </h2>
         </div>
 
         <QuestionTimer
@@ -513,19 +508,6 @@ export function QuizPlayer() {
           </div>
         ) : null}
 
-        {isTimedOut && !submitResult ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
-            <p className="text-sm font-medium text-red-700">Time expired</p>
-            <h2 className="mt-2 text-xl font-semibold tracking-tight text-red-950">
-              Submission closed
-            </h2>
-            <p className="mt-3 text-sm text-red-700">
-              Time is over. You can reveal the answer, then move to the next
-              question.
-            </p>
-          </div>
-        ) : null}
-
         {errorMessage ? (
           <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {errorMessage}
@@ -533,28 +515,7 @@ export function QuizPlayer() {
         ) : null}
 
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-neutral-500">Prompt</p>
-          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-neutral-950">
-            {currentQuiz.promptText}
-          </h2>
-
-          <div className="mt-5 grid gap-3 text-sm text-neutral-600">
-            <div className="rounded-xl bg-neutral-50 px-4 py-3">
-              <span className="font-medium text-neutral-800">Quiz ID:</span>{" "}
-              {currentQuiz.id}
-            </div>
-            <div className="rounded-xl bg-neutral-50 px-4 py-3">
-              <span className="font-medium text-neutral-800">Session ID:</span>{" "}
-              {session.id}
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
           <label className="block">
-            <span className="text-sm font-medium text-neutral-800">
-              LaTeX input
-            </span>
             <textarea
               value={latexInput}
               onChange={(event) => setLatexInput(event.target.value)}
@@ -610,7 +571,9 @@ export function QuizPlayer() {
               disabled={isBusy}
               className="rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 transition-[background-color,color,border-color,opacity] hover:border-neutral-400 hover:bg-neutral-100 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {actionState === "advancing" ? "Loading next..." : "Next question"}
+              {actionState === "advancing"
+                ? "Loading next..."
+                : "Next question"}
             </button>
           </div>
         </div>
@@ -632,14 +595,9 @@ export function QuizPlayer() {
         </div>
 
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-neutral-500">Reference</p>
           <h2 className="mt-2 text-xl font-semibold tracking-tight">
-            Current Target
+            Answer
           </h2>
-          <p className="mt-3 text-sm text-neutral-600">
-            In production behavior, this should only be visible after reveal,
-            timeout, or submit.
-          </p>
 
           {revealedLatex ? (
             <pre className="mt-5 overflow-x-auto rounded-2xl bg-neutral-950 px-4 py-3 text-sm text-white">

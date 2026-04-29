@@ -43,9 +43,11 @@ export function QuizSetupForm() {
     if (selectedLevelCount < 1) {
       return 0;
     }
-
+  
     return selectedLevelCount * 10;
   }, [selectedLevelCount]);
+  
+  const hasInvalidRange = formValue.levelMin > formValue.levelMax;
 
   const estimatedMinutes = useMemo(() => {
     const roughSecondsPerQuestion = 45;
@@ -113,7 +115,7 @@ export function QuizSetupForm() {
       return;
     }
 
-    if (formValue.levelMin > formValue.levelMax) {
+    if (hasInvalidRange) {
       const message = "Start level must be less than or equal to end level.";
 
       setSubmitState("error");
@@ -148,7 +150,6 @@ export function QuizSetupForm() {
       className="w-full rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm"
     >
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-neutral-500">Quiz</p>
         <h1 className="text-3xl font-semibold tracking-tight">Quiz Setup</h1>
         <p className="text-sm text-neutral-600">
           Select a difficulty range. The number of questions is generated from
@@ -206,6 +207,11 @@ export function QuizSetupForm() {
                 ))}
               </select>
             </label>
+            {hasInvalidRange ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 md:col-span-2">
+                Start level must be less than or equal to end level.
+              </div>
+            ) : null}
           </div>
 
           <section className="grid gap-4 md:grid-cols-3">
@@ -236,16 +242,6 @@ export function QuizSetupForm() {
               </p>
             </div>
           </section>
-
-          <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
-            <p className="text-sm font-medium text-neutral-800">
-              Quiz count rule
-            </p>
-            <p className="mt-2 text-sm text-neutral-600">
-              totalQuizCount = selectedLevelCount × 10. Manual quiz count
-              override is not supported in v0.
-            </p>
-          </div>
         </div>
       )}
 
@@ -262,7 +258,7 @@ export function QuizSetupForm() {
             isLoadingDefaults ||
             submitState === "submitting" ||
             !token ||
-            formValue.levelMin > formValue.levelMax
+            hasInvalidRange
           }
           className="rounded-xl bg-neutral-950 px-5 py-2.5 text-sm font-medium text-white transition-[background-color,opacity] hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
         >

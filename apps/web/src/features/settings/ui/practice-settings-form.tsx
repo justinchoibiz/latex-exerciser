@@ -41,6 +41,8 @@ export function PracticeSettingsForm() {
     return selectedLevelCount * 10;
   }, [selectedLevelCount]);
 
+  const hasInvalidRange = formValue.defaultLevelMin > formValue.defaultLevelMax;
+
   useEffect(() => {
     hydrate();
   }, [hydrate]);
@@ -95,7 +97,7 @@ export function PracticeSettingsForm() {
       return;
     }
 
-    if (formValue.defaultLevelMin > formValue.defaultLevelMax) {
+    if (hasInvalidRange) {
       const message =
       "Default minimum level must be less than or equal to maximum level.";
       setSaveState("error");
@@ -128,7 +130,6 @@ export function PracticeSettingsForm() {
       className="rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm"
     >
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-neutral-500">Settings</p>
         <h1 className="text-2xl font-semibold tracking-tight">
           Practice Settings
         </h1>
@@ -278,7 +279,7 @@ export function PracticeSettingsForm() {
       <div className="mt-8 flex justify-end">
         <button
           type="submit"
-          disabled={isLoading || saveState === "saving" || !token}
+          disabled={isLoading || saveState === "saving" || !token || hasInvalidRange}
           className="rounded-xl bg-neutral-950 px-5 py-2.5 text-sm font-medium text-white transition-[background-color,opacity] hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {saveState === "saving" ? "Saving..." : "Save settings"}

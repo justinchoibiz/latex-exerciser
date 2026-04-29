@@ -14,14 +14,17 @@ type AppShellProps = {
 const navigationItems = [
   {
     href: "/quiz/setup",
-    label: "Quiz Setup",
+    activePrefixes: ["/quiz/setup", "/quiz/play", "/quiz/result"],
+    label: "Quiz",
   },
   {
     href: "/settings/practice",
+    activePrefixes: ["/settings"],
     label: "Settings",
   },
   {
     href: "/quizzes",
+    activePrefixes: ["/quizzes"],
     label: "Quiz Data",
   },
 ];
@@ -50,16 +53,10 @@ function getRouteLabel(pathname: string) {
   return "LaTeX Exerciser";
 }
 
-function isActiveNavItem(pathname: string, href: string) {
-  if (href === "/quiz/setup") {
-    return pathname.startsWith("/quiz");
-  }
-
-  if (href === "/settings/practice") {
-    return pathname.startsWith("/settings");
-  }
-
-  return pathname === href || pathname.startsWith(`${href}/`);
+function isActiveNavItem(pathname: string, activePrefixes: string[]) {
+  return activePrefixes.some((prefix) => {
+    return pathname === prefix || pathname.startsWith(`${prefix}/`);
+  });
 }
 
 export function AppShell({ children }: AppShellProps) {
@@ -85,10 +82,10 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-950">
       <header className="sticky top-0 z-30 border-b border-neutral-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-6">
-          <div className="flex min-w-0 items-center gap-8">
+        <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-6 lg:gap-8">
             <Link
-              href="/quiz/setup"
+              href={token ? "/quiz/setup" : "/login"}
               className="shrink-0 text-sm font-semibold tracking-tight text-neutral-950"
             >
               LaTeX Exerciser
@@ -96,12 +93,16 @@ export function AppShell({ children }: AppShellProps) {
 
             <nav className="hidden items-center gap-1 md:flex">
               {navigationItems.map((item) => {
-                const isActive = isActiveNavItem(pathname, item.href);
+                const isActive = isActiveNavItem(
+                  pathname,
+                  item.activePrefixes,
+                );
 
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
+                    aria-current={isActive ? "page" : undefined}
                     className={cn(
                       "rounded-lg px-3 py-2 text-sm font-medium transition-[background-color,color]",
                       isActive
@@ -116,7 +117,7 @@ export function AppShell({ children }: AppShellProps) {
             </nav>
           </div>
 
-          <div className="flex shrink-0 items-center gap-4">
+          <div className="flex shrink-0 items-center gap-3 sm:gap-4">
             <div className="hidden text-right sm:block">
               <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
                 {routeLabel}
@@ -147,12 +148,13 @@ export function AppShell({ children }: AppShellProps) {
 
         <nav className="flex gap-1 overflow-x-auto border-t border-neutral-100 px-4 py-2 md:hidden">
           {navigationItems.map((item) => {
-            const isActive = isActiveNavItem(pathname, item.href);
+            const isActive = isActiveNavItem(pathname, item.activePrefixes);
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
                   "whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-[background-color,color]",
                   isActive

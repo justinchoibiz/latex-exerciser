@@ -138,7 +138,7 @@ export function SignupForm() {
       <p className="mt-5 text-center text-sm text-neutral-600">
         Already have an account?{" "}
         <Link
-          href="/login"
+          href={`/login?next=${encodeURIComponent(nextPath)}`}
           className="font-medium text-neutral-950 underline underline-offset-4"
         >
           Login

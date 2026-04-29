@@ -121,7 +121,7 @@ export function LoginForm() {
       <p className="mt-5 text-center text-sm text-neutral-600">
         No account?{" "}
         <Link
-          href="/signup"
+          href={`/signup?next=${encodeURIComponent(nextPath)}`}
           className="font-medium text-neutral-950 underline underline-offset-4"
         >
           Create one

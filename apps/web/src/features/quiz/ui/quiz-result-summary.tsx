@@ -77,6 +77,16 @@ export function QuizResultSummary({ sessionId }: QuizResultSummaryProps) {
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  function getResultDescription(result: QuizResult) {
+    const submittedCount = result.correctCount + result.wrongCount;
+  
+    if (submittedCount === 0) {
+      return "No answers were submitted in this session.";
+    }
+  
+    return `${submittedCount} submitted answers were included in this result.`;
+  }
+
   const performanceLabel = useMemo(() => {
     if (!result) {
       return "-";
@@ -174,10 +184,8 @@ export function QuizResultSummary({ sessionId }: QuizResultSummaryProps) {
             </h1>
             <p className="mt-3 text-sm text-neutral-600">
               Total score for session{" "}
-              <span className="font-medium text-neutral-950">
-                {result.sessionId}
-              </span>
-              .
+              <span className="font-medium text-neutral-950">{result.sessionId}</span>.
+              <span className="mt-1 block">{getResultDescription(result)}</span>
             </p>
           </div>
 

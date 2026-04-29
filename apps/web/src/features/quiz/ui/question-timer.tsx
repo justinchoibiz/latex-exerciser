@@ -45,7 +45,6 @@ export function QuestionTimer({
     <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-neutral-500">Timer</p>
           <p className={cn("mt-2 text-3xl font-semibold", classes.text)}>
             {formatRemainingTime(remainingSec)}
           </p>
@@ -71,9 +70,6 @@ export function QuestionTimer({
         />
       </div>
 
-      <p className="mt-3 text-xs text-neutral-500">
-        Timeout reveals the answer automatically.
-      </p>
     </div>
   );
 }
